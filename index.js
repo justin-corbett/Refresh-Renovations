@@ -788,13 +788,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+
 // Case Studies Slider
-gsap.registerPlugin(Observer,CustomEase)
+gsap.registerPlugin(Observer, CustomEase);
 CustomEase.create("slideshow-wipe", "0.6, 0.08, 0.02, 0.99");
 
 function initSlideShow(el) {
-  
-  // Save all elements in an object for easy reference
   const ui = {
     el,
     slides: Array.from(el.querySelectorAll('[data-slideshow="slide"]')),
@@ -805,12 +804,17 @@ function initSlideShow(el) {
   let current = 0;
   const length = ui.slides.length;
   let animating = false;
-  let observer;
-  let animationDuration = 0.9 // Define the duration of your 'slide' here
+  let observer = {
+    enable() {},
+    disable() {},
+    kill() {}
+  };
+  let animationDuration = 0.9;
 
   ui.slides.forEach((slide, index) => {
     slide.setAttribute('data-index', index);
   });
+
   ui.thumbs.forEach((thumb, index) => {
     thumb.setAttribute('data-index', index);
   });
@@ -828,12 +832,12 @@ function initSlideShow(el) {
       targetIndex !== null && targetIndex !== undefined
         ? targetIndex
         : direction === 1
-          ? current < length - 1
-            ? current + 1
-            : 0
-          : current > 0
-            ? current - 1
-            : length - 1;
+        ? current < length - 1
+          ? current + 1
+          : 0
+        : current > 0
+        ? current - 1
+        : length - 1;
 
     const currentSlide = ui.slides[previous];
     const currentInner = ui.inner[previous];
@@ -845,19 +849,18 @@ function initSlideShow(el) {
         duration: animationDuration,
         ease: 'slideshow-wipe'
       },
-      onStart: function() {
+      onStart() {
         upcomingSlide.classList.add('is--current');
         ui.thumbs[previous].classList.remove('is--current');
         ui.thumbs[current].classList.add('is--current');
       },
-      onComplete: function() {
+      onComplete() {
         currentSlide.classList.remove('is--current');
         animating = false;
-        // Re-enable observer after a short delay
-        setTimeout(() => observer.enable(), animationDuration);
+        setTimeout(() => observer.enable(), animationDuration * 1000);
       }
     })
-      .to(currentSlide, { xPercent: -direction * 100 },0)
+      .to(currentSlide, { xPercent: -direction * 100 }, 0)
       .to(currentInner, { xPercent: direction * 50 }, 0)
       .fromTo(upcomingSlide, { xPercent: direction * 100 }, { xPercent: 0 }, 0)
       .fromTo(upcomingInner, { xPercent: -direction * 50 }, { xPercent: 0 }, 0);
@@ -869,36 +872,14 @@ function initSlideShow(el) {
     const direction = targetIndex > current ? 1 : -1;
     navigate(direction, targetIndex);
   }
-  
+
   ui.thumbs.forEach(thumb => {
     thumb.addEventListener('click', onClick);
   });
 
-  observer = Observer.create({
-    target: el,
-    type: 'wheel,touch,pointer',
-    // Drag events to go left/right
-    onLeft: () => { if (!animating) navigate(1); },
-    onRight: () => {if (!animating) navigate(-1); },
-    // For wheel events, check horizontal movement
-    onWheel: (event) => {
-      if (animating) return;
-      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-        if (event.deltaX > 50) {
-          navigate(1);
-        } else if (event.deltaX < -50) {
-          navigate(-1);
-        }
-      }
-    },
-    wheelSpeed: -1,
-    tolerance: 10
-  });
-
-  // Cleanup function if you need it
   return {
-    destroy: function() {
-      if (observer) observer.kill();
+    destroy() {
+      observer.kill();
       ui.thumbs.forEach(thumb => {
         thumb.removeEventListener('click', onClick);
       });
@@ -911,7 +892,6 @@ function initParallaxImageGalleryThumbnails() {
   wrappers.forEach(wrap => initSlideShow(wrap));
 }
 
-// Initialize Parallax Image Gallery with Thumbnails
 document.addEventListener('DOMContentLoaded', () => {
   initParallaxImageGalleryThumbnails();
 });
@@ -921,294 +901,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-
-
-// Feature Pills
-function initExpandingFeaturePills() {
-  const wraps = document.querySelectorAll("[data-feature-pills-init]");
-  if (!wraps.length) return;
-
-  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  wraps.forEach((wrap, wrapIdx) => {
-    const items = Array.from(wrap.querySelectorAll("[data-feature-pills-item]"));
-    const visuals = Array.from(wrap.querySelectorAll("[data-feature-pills-visual]"));
-    const cover = wrap.querySelector("[data-feature-pills-cover]");
-    const closeBtn = wrap.querySelector("[data-feature-pills-close]");
-    if (!items.length) return;
-
-    if (visuals.length && visuals.length !== items.length) {
-      console.warn(
-        `[ExpandingFeaturePills] items (${items.length}) and visuals (${visuals.length}) mismatch in module #${wrapIdx}. Visual syncing uses index order.`
-      );
-    }
-
-    const uidBase = `feature-pills-${wrapIdx}`;
-    const ease = "back.out(2)";
-    const animationDuration = 0.5;
-
-    const getExpandedWidth = () =>
-      getComputedStyle(wrap).getPropertyValue("--content-item-expanded").trim() || "";
-
-    const getActiveIndex = () => {
-      const active = items.find((it) => it.getAttribute("data-active") === "true");
-      return active ? Number(active.getAttribute("data-feature-pills-index")) : null;
-    };
-
-    const setWrapActive = (isActive) => {
-      wrap.setAttribute("data-feature-pills-active", isActive ? "true" : "false");
-      if (closeBtn) closeBtn.setAttribute("aria-hidden", isActive ? "false" : "true");
-      if (cover) {
-        cover.setAttribute("data-active", isActive ? "false" : "true");
-        cover.setAttribute("aria-hidden", isActive ? "true" : "false");
-      }
-    };
-
-    const setVisualActive = (indexOrNull) => {
-      if (!visuals.length) return;
-      visuals.forEach((v) => {
-        const idx = Number(v.getAttribute("data-feature-pills-index"));
-        const isActive = indexOrNull !== null && idx === indexOrNull;
-        v.setAttribute("data-active", isActive ? "true" : "false");
-        v.setAttribute("aria-hidden", isActive ? "false" : "true");
-      });
-    };
-
-    const setItemA11y = (item, isOpen) => {
-      const btn = item.querySelector("[data-feature-pills-button]");
-      const content = item.querySelector("[data-feature-pills-content]");
-      if (!btn || !content) return;
-      btn.setAttribute("aria-expanded", isOpen ? "true" : "false");
-      content.setAttribute("aria-hidden", isOpen ? "false" : "true");
-    };
-
-    const measureButtonH = (item) => {
-      const btn = item.querySelector("[data-feature-pills-button]");
-      return btn ? Math.ceil(btn.getBoundingClientRect().height) : 0;
-    };
-
-    const measureInnerH = (item, expandedW) => {
-      const inner = item.querySelector("[data-feature-pills-inner]");
-      if (!inner) return 0;
-
-      const mask = item.querySelector(".feature-pills__item-mask");
-
-      const prevMaskOverflow = mask ? mask.style.overflow : null;
-      if (mask) mask.style.overflow = "visible";
-
-      const prevMaxW = inner.style.maxWidth;
-      if (expandedW) inner.style.maxWidth = expandedW;
-
-      const h = Math.ceil(inner.getBoundingClientRect().height);
-
-      if (expandedW) inner.style.maxWidth = prevMaxW || "";
-      if (mask) mask.style.overflow = prevMaskOverflow || "";
-
-      return h;
-    };
-
-    const getHeights = (item, expandedW) => {
-      const buttonH = measureButtonH(item);
-      const innerH = measureInnerH(item, expandedW);
-      const openH = Math.max(buttonH, innerH);
-      return { buttonH, openH };
-    };
-
-    const collapsedWidthPx = new Map();
-        
-    const captureCollapsedWidths = () => {
-      items.forEach((item) => {
-        const prev = item.style.width;
-        item.style.width = "";
-        collapsedWidthPx.set(item, Math.ceil(item.getBoundingClientRect().width));
-        item.style.width = prev;
-      });
-    };
-
-    const animateBox = (el, vars) => {
-      gsap.killTweensOf(el);
-      if (prefersReducedMotion) {
-        if (vars.height != null) el.style.height = `${vars.height}px`;
-        if (vars.width != null) el.style.width = typeof vars.width === "number" ? `${vars.width}px` : vars.width;
-        return;
-      }
-      gsap.to(el, { ...vars, duration: animationDuration, ease, overwrite: true });
-    };
-
-    const openItem = (item) => {
-      const expandedW = getExpandedWidth();
-      const { openH } = getHeights(item, expandedW);
-
-      item.setAttribute("data-active", "true");
-      setItemA11y(item, true);
-      setWrapActive(true);
-
-      const targetW = expandedW || `${collapsedWidthPx.get(item) || Math.ceil(item.getBoundingClientRect().width)}px`;
-      animateBox(item, { height: openH, width: targetW });
-    };
-
-    const closeItem = (item) => {
-      const expandedW = getExpandedWidth();
-      const { buttonH } = getHeights(item, expandedW);
-
-      item.setAttribute("data-active", "false");
-      setItemA11y(item, false);
-
-      const targetW = collapsedWidthPx.get(item) || Math.ceil(item.getBoundingClientRect().width);
-      animateBox(item, { height: buttonH, width: targetW });
-    };
-
-    const switchTo = (nextIndex) => {
-      const current = getActiveIndex();
-      if (current === nextIndex) return;
-
-      const nextItem = items[nextIndex];
-      if (!nextItem) return;
-
-      if (current !== null) closeItem(items[current]);
-      openItem(nextItem);
-
-      setVisualActive(nextIndex);
-    };
-
-    const closeAll = () => {
-      const current = getActiveIndex();
-      if (current === null) return;
-      closeItem(items[current]);
-      setVisualActive(null);
-      setWrapActive(false);
-    };
-
-    items.forEach((item, i) => {
-      item.setAttribute("data-feature-pills-index", String(i));
-      if (!item.hasAttribute("data-active")) item.setAttribute("data-active", "false");
-
-      const btn = item.querySelector("[data-feature-pills-button]");
-      const content = item.querySelector("[data-feature-pills-content]");
-      if (btn) {
-        btn.setAttribute("data-feature-pills-index", String(i));
-        btn.type = "button";
-        const triggerId = `${uidBase}-trigger-${i}`;
-        if (!btn.id) btn.id = triggerId;
-      }
-      if (content && btn) {
-        content.setAttribute("data-feature-pills-index", String(i));
-        const panelId = `${uidBase}-panel-${i}`;
-        if (!content.id) content.id = panelId;
-        btn.setAttribute("aria-controls", content.id);
-        content.setAttribute("role", "region");
-        content.setAttribute("aria-labelledby", btn.id);
-        if (!content.hasAttribute("aria-hidden")) content.setAttribute("aria-hidden", "true");
-        if (!btn.hasAttribute("aria-expanded")) btn.setAttribute("aria-expanded", "false");
-      }
-    });
-
-    visuals.forEach((v, i) => v.setAttribute("data-feature-pills-index", String(i)));
-
-    if (closeBtn) {
-      closeBtn.type = "button";
-      if (!closeBtn.hasAttribute("aria-hidden")) closeBtn.setAttribute("aria-hidden", "true");
-      closeBtn.addEventListener("click", closeAll);
-    }
-
-    items.forEach((item) => {
-      const h = measureButtonH(item);
-      item.style.height = `${h}px`;
-    });
-
-    setWrapActive(false);
-    setVisualActive(null);
-
-    items.forEach((item, i) => {
-      const btn = item.querySelector("[data-feature-pills-button]");
-      if (!btn) return;
-      btn.addEventListener("click", () => switchTo(i));
-    });
-
-    wrap.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeAll();
-    });
-    
-    const debounce = (fn, wait = 150) => {
-      let t;
-      return (...args) => {
-        clearTimeout(t);
-        t = setTimeout(() => fn(...args), wait);
-      };
-    };
-    
-    const handleResize = () => {
-      const current = getActiveIndex();
-    
-      items.forEach((item) => {
-        if (item.getAttribute("data-active") !== "true") item.style.width = "";
-      });
-    
-      captureCollapsedWidths();
-    
-      if (current !== null) {
-        const item = items[current];
-        const expandedW = getExpandedWidth();
-        const { openH } = getHeights(item, expandedW);
-        const targetW = expandedW || "";
-    
-        if (prefersReducedMotion) {
-          item.style.height = `${openH}px`;
-          if (targetW) item.style.width = targetW;
-        } else {
-          const fallbackW = `${Math.ceil(item.getBoundingClientRect().width)}px`;
-          const widthForActive = targetW || fallbackW;
-          
-          gsap.set(item, { height: openH, width: widthForActive });
-          if (targetW) item.style.width = targetW;
-        }
-      } else {
-        items.forEach((item) => {
-          const h = measureButtonH(item);
-          item.style.height = `${h}px`;
-        });
-      }
-    };
-        
-    const debouncedResize = debounce(handleResize, 200);
-    
-    captureCollapsedWidths();
-    window.addEventListener("resize", debouncedResize, { passive: true });
-  });
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  initExpandingFeaturePills();
-});
-
-
-
-
-
 // Feature timed tabs
 function initTabSystem() {
   const wrappers = document.querySelectorAll('[data-tabs="wrapper"]');
-  
+
   wrappers.forEach((wrapper) => {
     const contentItems = wrapper.querySelectorAll('[data-tabs="content-item"]');
     const visualItems = wrapper.querySelectorAll('[data-tabs="visual-item"]');
-    
+
     const autoplay = wrapper.dataset.tabsAutoplay === "true";
-    const autoplayDuration = parseInt(wrapper.dataset.tabsAutoplayDuration) || 5000;
-    
-    let activeContent = null; // keep track of active item/link
+    const autoplayDuration = parseInt(wrapper.dataset.tabsAutoplayDuration, 10) || 5000;
+
+    let activeContent = null;
     let activeVisual = null;
     let isAnimating = false;
-    let progressBarTween = null; // to stop/start the progress bar
+    let progressBarTween = null;
+    let hasInitialized = false;
 
     function startProgressBar(index) {
       if (progressBarTween) progressBarTween.kill();
+
       const bar = contentItems[index].querySelector('[data-tabs="item-progress"]');
       if (!bar) return;
-      
-      // In this function, you can basically do anything you want, that should happen as a tab is active
-      // Maybe you have a circle filling, some other element growing, you name it.
+
       gsap.set(bar, { scaleX: 0, transformOrigin: "left center" });
+
       progressBarTween = gsap.to(bar, {
         scaleX: 1,
         duration: autoplayDuration / 1000,
@@ -1216,7 +933,7 @@ function initTabSystem() {
         onComplete: () => {
           if (!isAnimating) {
             const nextIndex = (index + 1) % contentItems.length;
-            switchTab(nextIndex); // once bar is full, set next to active – this is important
+            switchTab(nextIndex);
           }
         },
       });
@@ -1224,38 +941,33 @@ function initTabSystem() {
 
     function switchTab(index) {
       if (isAnimating || contentItems[index] === activeContent) return;
-      
+
       isAnimating = true;
-      if (progressBarTween) progressBarTween.kill(); // Stop any running progress bar here
-      
+      if (progressBarTween) progressBarTween.kill();
+
       const outgoingContent = activeContent;
       const outgoingVisual = activeVisual;
       const outgoingBar = outgoingContent?.querySelector('[data-tabs="item-progress"]');
-      
+
       const incomingContent = contentItems[index];
       const incomingVisual = visualItems[index];
       const incomingBar = incomingContent.querySelector('[data-tabs="item-progress"]');
-      
-      outgoingContent?.classList.remove("active");
-      outgoingVisual?.classList.remove("active");
-      incomingContent.classList.add("active");
-      incomingVisual.classList.add("active");
-      
+
       const tl = gsap.timeline({
         defaults: { duration: 0.65, ease: "power3" },
         onComplete: () => {
           activeContent = incomingContent;
           activeVisual = incomingVisual;
           isAnimating = false;
-          if (autoplay) startProgressBar(index); // Start autoplay bar here
+
+          if (autoplay) startProgressBar(index);
         },
       });
-      
-      // Wrap 'outgoing' in a check to prevent warnings on first run of the function
-      // Of course, during first run (on page load), there's no 'outgoing' tab yet!
+
       if (outgoingContent) {
         outgoingContent.classList.remove("active");
         outgoingVisual?.classList.remove("active");
+
         tl.set(outgoingBar, { transformOrigin: "right center" })
           .to(outgoingBar, { scaleX: 0, duration: 0.3 }, 0)
           .to(outgoingVisual, { autoAlpha: 0, xPercent: 3 }, 0)
@@ -1264,29 +976,60 @@ function initTabSystem() {
 
       incomingContent.classList.add("active");
       incomingVisual.classList.add("active");
-      tl.fromTo(incomingVisual, { autoAlpha: 0, xPercent: 3 }, { autoAlpha: 1, xPercent: 0 }, 0.3)
-        .fromTo( incomingContent.querySelector('[data-tabs="item-details"]'),{ height: 0 },{ height: "auto" },0)
+
+      tl.fromTo(
+        incomingVisual,
+        { autoAlpha: 0, xPercent: 3 },
+        { autoAlpha: 1, xPercent: 0 },
+        0.3
+      )
+        .fromTo(
+          incomingContent.querySelector('[data-tabs="item-details"]'),
+          { height: 0 },
+          { height: "auto" },
+          0
+        )
         .set(incomingBar, { scaleX: 0, transformOrigin: "left center" }, 0);
     }
 
-    // on page load, set first to active
-    // idea: you could wrap this in a scrollTrigger
-    // so it will only start once a user reaches this section
-    switchTab(0);
-    
-    // switch tabs on click
-    contentItems.forEach((item, i) =>
-      item.addEventListener("click", () => {
-        if (item === activeContent) return; // ignore click if current one is already active
-        switchTab(i);
-      })
+    function initWhenVisible() {
+      if (hasInitialized) return;
+      hasInitialized = true;
+      switchTab(0);
+    }
+
+    // Initialize only once when wrapper enters viewport
+    const observer = new IntersectionObserver(
+      (entries, obs) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            initWhenVisible();
+            obs.unobserve(wrapper);
+          }
+        });
+      },
+      {
+        threshold: 0.35, // adjust as needed
+      }
     );
-    
+
+    observer.observe(wrapper);
+
+    // Click handling still works
+    contentItems.forEach((item, i) => {
+      item.addEventListener("click", () => {
+        if (!hasInitialized) {
+          hasInitialized = true;
+        }
+
+        if (item === activeContent) return;
+        switchTab(i);
+      });
+    });
   });
 }
 
-// Initialize Tab System with Autoplay Option
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
   initTabSystem();
 });
 
@@ -1358,6 +1101,26 @@ const lenis = new Lenis();
 lenis.on('scroll', ScrollTrigger.update);
 gsap.ticker.add((time) => {lenis.raf(time * 1000);});
 gsap.ticker.lagSmoothing(0);
+
+// Scroll-To Anchor Lenis
+function initScrollToAnchorLenis() {
+  document.querySelectorAll("[data-anchor-target]").forEach(element => {
+    element.addEventListener("click", function () {
+      const targetScrollToAnchorLenis = this.getAttribute("data-anchor-target");
+
+      lenis.scrollTo(targetScrollToAnchorLenis, {
+        easing: (x) => (x < 0.5 ? 8 * x * x * x * x : 1 - Math.pow(-2 * x + 2, 4) / 2),
+        duration: 1.2,
+        offset: 1 // Option to create an offset when there is a fixed navigation for example
+      });
+    });
+  });
+}
+
+// Initialize Scroll-To Anchor Lenis
+document.addEventListener('DOMContentLoaded', () => {
+  initScrollToAnchorLenis();
+});
 
 
 
