@@ -120,7 +120,7 @@ function initLineRevealTestimonials() {
 
   const imageClipHidden = "circle(0% at 50% 50%)";
   const imageClipVisible = "circle(50% at 50% 50%)";
-  
+
   wraps.forEach((wrap) => {
     const list = wrap.querySelector("[data-testimonial-list]");
     if (!list) return;
@@ -133,6 +133,11 @@ function initLineRevealTestimonials() {
     const elCurrent = wrap.querySelector("[data-current]");
     const elTotal = wrap.querySelector("[data-total]");
 
+    // NEW: stack of images at the wrap level
+    const stackImages = Array.from(
+      wrap.querySelectorAll("[data-testimonial-stack-img]")
+    );
+
     if (elTotal) elTotal.textContent = String(items.length);
 
     let activeIndex = items.findIndex((el) => el.classList.contains("is--active"));
@@ -140,28 +145,24 @@ function initLineRevealTestimonials() {
 
     let isAnimating = false;
     let reduceMotion = false;
-    
+
     const autoplayEnabled = wrap.getAttribute("data-autoplay") === "true";
     const autoplayDuration = parseInt(wrap.getAttribute("data-autoplay-duration"), 10) || 4000;
-    
+
     let autoplayCall = null;
     let isInView = true;
 
     const slides = items.map((item) => ({
       item,
       image: item.querySelector("[data-testimonial-img]"),
-      
       splitTargets: [
         item.querySelector("[data-testimonial-text]"),
         ...item.querySelectorAll("[data-testimonial-split]"),
       ].filter(Boolean),
-      
       splitInstances: [],
-      
       getLines() {
         return this.splitInstances.flatMap((instance) => instance.lines);
       },
-      
     }));
 
     function setSlideState(slideIndex, isActive) {
@@ -177,11 +178,11 @@ function initLineRevealTestimonials() {
     function updateCounter() {
       if (elCurrent) elCurrent.textContent = String(activeIndex + 1);
     }
-    
+
     function startAutoplay() {
       if (!autoplayEnabled) return;
       if (autoplayCall) autoplayCall.kill();
-    
+
       autoplayCall = gsap.delayedCall(autoplayDuration / 1000, () => {
         if (!isInView || isAnimating) {
           startAutoplay();
@@ -191,17 +192,17 @@ function initLineRevealTestimonials() {
         startAutoplay();
       });
     }
-    
+
     function pauseAutoplay() {
       if (autoplayCall) autoplayCall.pause();
     }
-    
+
     function resumeAutoplay() {
       if (!autoplayEnabled) return;
       if (!autoplayCall) startAutoplay();
       else autoplayCall.resume();
     }
-    
+
     function resetAutoplay() {
       if (!autoplayEnabled) return;
       startAutoplay();
@@ -210,6 +211,11 @@ function initLineRevealTestimonials() {
     // Set initial state
     slides.forEach((_, i) => setSlideState(i, i === activeIndex));
     updateCounter();
+
+    // NEW: initial state for stacked images — only the active one visible
+    stackImages.forEach((img, i) => {
+      gsap.set(img, { autoAlpha: i === activeIndex ? 1 : 0 });
+    });
 
     // Handle reduced motion preference
     gsap.matchMedia().add(
@@ -250,6 +256,10 @@ function initLineRevealTestimonials() {
       const outgoingSlide = slides[activeIndex];
       const incomingSlide = slides[nextIndex];
 
+      // NEW: stack image refs
+      const outgoingStackImg = stackImages[activeIndex];
+      const incomingStackImg = stackImages[nextIndex];
+
       const tl = gsap.timeline({
         onComplete: () => {
           setSlideState(activeIndex, false);
@@ -261,7 +271,7 @@ function initLineRevealTestimonials() {
       });
 
       if (reduceMotion) {
-        tl.to(outgoingSlide.item, { 
+        tl.to(outgoingSlide.item, {
             autoAlpha: 0,
             duration: 0.4,
             ease: "power2"
@@ -273,7 +283,11 @@ function initLineRevealTestimonials() {
             duration: 0.4,
             ease: "power2"
           }, 0);
-          
+
+        // NEW: snap stack images on reduced motion
+        if (outgoingStackImg) tl.set(outgoingStackImg, { autoAlpha: 0 }, 0);
+        if (incomingStackImg) tl.set(incomingStackImg, { autoAlpha: 1 }, 0);
+
         return;
       }
 
@@ -282,7 +296,7 @@ function initLineRevealTestimonials() {
 
       gsap.set(incomingSlide.item, { autoAlpha: 1, pointerEvents: "auto" });
       gsap.set(incomingLines, { yPercent: 110 });
-  
+
       if (outgoingSlide.image) gsap.set(outgoingSlide.image, { clipPath: imageClipVisible });
 
       tl.to(outgoingLines, {
@@ -297,6 +311,22 @@ function initLineRevealTestimonials() {
           clipPath: imageClipHidden,
           duration: 0.6,
           ease: "power4.inOut",
+        }, 0);
+      }
+
+      // NEW: crossfade the stacked images alongside the line animations
+      if (outgoingStackImg) {
+        tl.to(outgoingStackImg, {
+          autoAlpha: 0,
+          duration: 0.6,
+          ease: "power2.inOut",
+        }, 0);
+      }
+      if (incomingStackImg) {
+        tl.to(incomingStackImg, {
+          autoAlpha: 1,
+          duration: 0.6,
+          ease: "power2.inOut",
         }, 0);
       }
 
@@ -319,7 +349,7 @@ function initLineRevealTestimonials() {
 
       tl.set(outgoingSlide.item, { autoAlpha: 0 }, ">");
     }
-  
+
     // Start autoplay on the wrap (only works if autoplay is set to 'true')
     startAutoplay();
 
@@ -329,70 +359,53 @@ function initLineRevealTestimonials() {
         goTo((activeIndex + 1) % slides.length);
       });
     }
-    
+
     if (btnPrev) {
       btnPrev.addEventListener("click", () => {
         resetAutoplay();
         goTo((activeIndex - 1 + slides.length) % slides.length);
       });
     }
-        
+
     function onKeyDown(e) {
       if (!isInView) return;
-    
-      // Don't hijack arrow keys while user is typing.
+
       const t = e.target;
       const isTypingTarget =
         t &&
         (t.tagName === "INPUT" ||
           t.tagName === "TEXTAREA" ||
           t.isContentEditable);
-    
+
       if (isTypingTarget) return;
-    
+
       if (e.key === "ArrowRight") {
         e.preventDefault();
         resetAutoplay();
         goTo((activeIndex + 1) % slides.length);
       }
-    
+
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         resetAutoplay();
         goTo((activeIndex - 1 + slides.length) % slides.length);
       }
     }
-    
-    // Listen for left/right arrows
+
     window.addEventListener("keydown", onKeyDown);
-    
-    // Enable/disable keyboard + autoplay depending on scroll position
+
     ScrollTrigger.create({
       trigger: wrap,
       start: "top bottom",
       end: "bottom top",
-      onEnter: () => {
-        isInView = true;
-        resumeAutoplay();
-      },
-      onEnterBack: () => {
-        isInView = true;
-        resumeAutoplay();
-      },
-      onLeave: () => {
-        isInView = false;
-        pauseAutoplay();
-      },
-      onLeaveBack: () => {
-        isInView = false;
-        pauseAutoplay();
-      },
+      onEnter: () => { isInView = true; resumeAutoplay(); },
+      onEnterBack: () => { isInView = true; resumeAutoplay(); },
+      onLeave: () => { isInView = false; pauseAutoplay(); },
+      onLeaveBack: () => { isInView = false; pauseAutoplay(); },
     });
-    
   });
 }
 
-// Initialize Line Reveal Testimonials
 document.addEventListener("DOMContentLoaded", () => {
   initLineRevealTestimonials();
 });
@@ -798,7 +811,9 @@ function initSlideShow(el) {
     el,
     slides: Array.from(el.querySelectorAll('[data-slideshow="slide"]')),
     inner: Array.from(el.querySelectorAll('[data-slideshow="parallax"]')),
-    thumbs: Array.from(el.querySelectorAll('[data-slideshow="thumb"]'))
+    thumbs: Array.from(el.querySelectorAll('[data-slideshow="thumb"]')),
+    prev: el.querySelector('[data-slideshow="prev"]'),
+    next: el.querySelector('[data-slideshow="next"]')
   };
 
   let current = 0;
@@ -873,9 +888,22 @@ function initSlideShow(el) {
     navigate(direction, targetIndex);
   }
 
+  function onPrev() {
+    if (animating) return;
+    navigate(-1);
+  }
+
+  function onNext() {
+    if (animating) return;
+    navigate(1);
+  }
+
   ui.thumbs.forEach(thumb => {
     thumb.addEventListener('click', onClick);
   });
+
+  if (ui.prev) ui.prev.addEventListener('click', onPrev);
+  if (ui.next) ui.next.addEventListener('click', onNext);
 
   return {
     destroy() {
@@ -883,6 +911,8 @@ function initSlideShow(el) {
       ui.thumbs.forEach(thumb => {
         thumb.removeEventListener('click', onClick);
       });
+      if (ui.prev) ui.prev.removeEventListener('click', onPrev);
+      if (ui.next) ui.next.removeEventListener('click', onNext);
     }
   };
 }
